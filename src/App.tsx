@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 type Tone = "neutral" | "expert" | "bold" | "friendly";
 type LlmMode = "local" | "hybrid" | "cloud";
@@ -17,7 +17,8 @@ const toneLabels: Record<Tone, string> = {
 };
 
 export function App() {
-  const [browserUrl, setBrowserUrl] = useState("https://www.threads.com/");
+  const [remoteSessionUrl, setRemoteSessionUrl] = useState("");
+  const [sessionInput, setSessionInput] = useState("");
   const [llmMode, setLlmMode] = useState<LlmMode>("local");
   const [localModel, setLocalModel] = useState("mistral:7b-instruct");
   const [selectedTone, setSelectedTone] = useState<Tone>("expert");
@@ -29,6 +30,17 @@ export function App() {
   const [autoApprove, setAutoApprove] = useState(false);
   const [semanticFilter, setSemanticFilter] = useState(true);
   const [includeQuestion, setIncludeQuestion] = useState(true);
+
+  const hasRemoteSession = useMemo(() => remoteSessionUrl.trim().length > 0, [remoteSessionUrl]);
+
+  const handleConnectSession = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRemoteSessionUrl(sessionInput.trim());
+  };
+
+  const openThreads = () => {
+    window.open("https://www.threads.com/", "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.18),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.16),_transparent_24%),linear-gradient(180deg,_#060816_0%,_#0b1020_42%,_#0f172a_100%)] text-slate-100">
@@ -44,28 +56,36 @@ export function App() {
         <main className="grid flex-1 gap-4 xl:grid-cols-[1fr_24rem]">
           <section className="flex min-h-[600px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 p-3">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  </div>
-                </div>
+              <form onSubmit={handleConnectSession} className="flex flex-col gap-2 md:flex-row md:items-center">
                 <input
-                  value={browserUrl}
-                  onChange={(event) => setBrowserUrl(event.target.value)}
+                  value={sessionInput}
+                  onChange={(event) => setSessionInput(event.target.value)}
                   className="h-9 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 text-sm outline-none"
-                  placeholder="https://www.threads.com/"
+                  placeholder="Remote browser URL (например https://session.yourdomain.com)"
                 />
-                <button className="h-9 rounded-lg bg-indigo-500 px-4 text-sm font-medium hover:bg-indigo-400">Открыть</button>
-              </div>
+                <button type="submit" className="h-9 rounded-lg bg-indigo-500 px-4 text-sm font-medium hover:bg-indigo-400">
+                  Подключить
+                </button>
+                <button
+                  type="button"
+                  onClick={openThreads}
+                  className="h-9 rounded-lg border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-white/10"
+                >
+                  Threads в новой вкладке
+                </button>
+              </form>
             </div>
             <div className="relative flex-1">
-              <div className="absolute left-3 top-3 z-10 rounded-lg border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-                Threads может блокировать iframe. Используйте remote browser session.
-              </div>
-              <iframe title="Threads" src={browserUrl} className="h-full w-full bg-white" />
+              {hasRemoteSession ? (
+                <iframe title="Remote Browser Session" src={remoteSessionUrl} className="h-full w-full bg-white" />
+              ) : (
+                <div className="flex h-full items-center justify-center bg-black/20 p-6">
+                  <div className="text-center text-sm text-slate-300">
+                    <p>Встроенный iframe для threads.com блокируется.</p>
+                    <p>Подключите remote browser URL или откройте Threads в новой вкладке.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
