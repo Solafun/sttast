@@ -1,24 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type Tone = "neutral" | "expert" | "bold" | "friendly";
 type LlmMode = "local" | "hybrid" | "cloud";
-type ControlMode = "extension" | "remote" | "external";
-type BridgeStatus = "disconnected" | "searching" | "connected";
+type BrowserMode = "stream" | "external";
+type StreamStatus = "idle" | "checking" | "online";
 
-type ActiveTabInfo = {
-  id?: number;
-  title?: string;
-  url?: string;
-  origin?: "extension" | "bridge";
-};
-
-type BridgeMessage = {
-  source?: string;
-  type?: string;
-  payload?: ActiveTabInfo;
-};
-
-const modeLabels: Record<LlmMode, string> = {
+const llmModeLabels: Record<LlmMode, string> = {
   local: "Local",
   hybrid: "Hybrid",
   cloud: "Cloud",
@@ -31,145 +18,104 @@ const toneLabels: Record<Tone, string> = {
   friendly: "Дружелюбный",
 };
 
-const controlModeLabels: Record<ControlMode, string> = {
-  extension: "Extension",
-  remote: "Remote",
+const browserModeLabels: Record<BrowserMode, string> = {
+  stream: "Connect Stream",
   external: "External",
 };
 
 function normalizeUrl(value: string) {
   if (!value.trim()) return "";
   if (value.startsWith("http://") || value.startsWith("https://")) return value;
-  return `https://${value}`;
+  return `http://${value}`;
 }
 
-function getStatusClasses(status: BridgeStatus) {
-  if (status === "connected") return "bg-emerald-400";
-  if (status === "searching") return "bg-amber-400";
+function statusDot(status: StreamStatus) {
+  if (status === "online") return "bg-emerald-400";
+  if (status === "checking") return "bg-amber-400";
   return "bg-slate-500";
 }
 
 export function App() {
-  const [controlMode, setControlMode] = useState<ControlMode>("extension");
-  const [browserUrl, setBrowserUrl] = useState("https://www.threads.com/");
-  const [remoteSessionInput, setRemoteSessionInput] = useState("");
-  const [remoteSessionUrl, setRemoteSessionUrl] = useState("");
-  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>("disconnected");
-  const [bridgeMessage, setBridgeMessage] = useState("Нет подключения");
-  const [activeTab, setActiveTab] = useState<ActiveTabInfo | null>(null);
+  const [browserMode, setBrowserMode] = useState<BrowserMode>("stream");
+  const [threadsUrl, setThreadsUrl] = useState("https://www.threads.net/");
+  const [streamBaseInput, setStreamBaseInput] = useState("http://127.0.0.1:3010");
+  const [viewerPath, setViewerPath] = useState("/viewer");
+  const [controlPath, setControlPath] = useState("/control");
+  const [sessionId, setSessionId] = useState("threads-main");
+  const [streamToken, setStreamToken] = useState("");
+  const [streamStatus, setStreamStatus] = useState<StreamStatus>("idle");
+  const [streamMessage, setStreamMessage] = useState("Контейнер не подключен");
+  const [streamEnabled, setStreamEnabled] = useState(false);
+
   const [llmMode, setLlmMode] = useState<LlmMode>("local");
   const [localModel, setLocalModel] = useState("mistral:7b-instruct");
   const [selectedTone, setSelectedTone] = useState<Tone>("expert");
   const [temperature, setTemperature] = useState(0.55);
   const [maxCommentsPerHour, setMaxCommentsPerHour] = useState(12);
   const [systemPrompt, setSystemPrompt] = useState(
-    "Пиши короткий, естественный и умный комментарий без спама."
+    "Пиши короткий естественный комментарий по теме поста без спама."
   );
   const [autoApprove, setAutoApprove] = useState(false);
-  const [semanticFilter, setSemanticFilter] = useState(true);
-  const [includeQuestion, setIncludeQuestion] = useState(true);
+  const [safetyFilter, setSafetyFilter] = useState(true);
+  const [questionEnding, setQuestionEnding] = useState(true);
 
-  const normalizedBrowserUrl = useMemo(() => normalizeUrl(browserUrl), [browserUrl]);
-  const normalizedRemoteInput = useMemo(() => normalizeUrl(remoteSessionInput), [remoteSessionInput]);
+  const streamBaseUrl = useMemo(() => normalizeUrl(streamBaseInput), [streamBaseInput]);
+  const controlUrl = useMemo(() => {
+    if (!streamBaseUrl) return "";
+    return `${streamBaseUrl}${controlPath}?session=${encodeURIComponent(sessionId)}`;
+  }, [streamBaseUrl, controlPath, sessionId]);
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent<BridgeMessage>) => {
-      const data = event.data;
-      if (!data || data.source !== "threads-control-bridge") return;
+  const viewerUrl = useMemo(() => {
+    if (!streamBaseUrl || !streamEnabled) return "";
+    const params = new URLSearchParams();
+    params.set("session", sessionId);
+    if (streamToken.trim()) params.set("token", streamToken.trim());
+    return `${streamBaseUrl}${viewerPath}?${params.toString()}`;
+  }, [streamBaseUrl, viewerPath, sessionId, streamToken, streamEnabled]);
 
-      if (data.type === "pong") {
-        setBridgeStatus("connected");
-        setBridgeMessage("Расширение обнаружено");
-      }
-
-      if (data.type === "active-tab") {
-        setBridgeStatus("connected");
-        setActiveTab(data.payload ?? null);
-        setBridgeMessage("Активная вкладка подключена");
-      }
-
-      if (data.type === "tab-not-found") {
-        setBridgeStatus("connected");
-        setActiveTab(null);
-        setBridgeMessage("Вкладка Threads не найдена");
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  const openExternal = () => {
-    if (!normalizedBrowserUrl) return;
-    window.open(normalizedBrowserUrl, "_blank", "noopener,noreferrer");
+  const openThreads = () => {
+    window.open(threadsUrl || "https://www.threads.net/", "_blank", "noopener,noreferrer");
   };
 
-  const connectRemote = () => {
-    if (!normalizedRemoteInput) return;
-    setRemoteSessionUrl(normalizedRemoteInput);
-  };
-
-  const disconnectRemote = () => {
-    setRemoteSessionUrl("");
-  };
-
-  const detectExtension = () => {
-    setBridgeStatus("searching");
-    setBridgeMessage("Поиск расширения...");
-    window.postMessage(
-      {
-        source: "threads-control-panel",
-        type: "ping",
-      },
-      "*"
-    );
+  const checkContainer = () => {
+    setStreamStatus("checking");
+    setStreamMessage("Проверка Docker Connect Stream...");
 
     window.setTimeout(() => {
-      setBridgeStatus((current) => {
-        if (current === "connected") return current;
-        setBridgeMessage("Расширение не отвечает");
-        return "disconnected";
-      });
-    }, 1200);
+      if (!streamBaseUrl) {
+        setStreamStatus("idle");
+        setStreamMessage("Укажите адрес контейнера");
+        return;
+      }
+
+      setStreamStatus("online");
+      setStreamMessage("Контейнер доступен");
+    }, 700);
   };
 
-  const requestActiveTab = () => {
-    setBridgeStatus("searching");
-    setBridgeMessage("Поиск вкладки Threads...");
-    window.postMessage(
-      {
-        source: "threads-control-panel",
-        type: "get-active-threads-tab",
-      },
-      "*"
-    );
+  const connectStream = () => {
+    if (!streamBaseUrl) {
+      setStreamStatus("idle");
+      setStreamMessage("Укажите адрес контейнера");
+      setStreamEnabled(false);
+      return;
+    }
 
-    window.setTimeout(() => {
-      setBridgeStatus((current) => {
-        if (current === "connected") return current;
-        setBridgeMessage("Нет ответа от bridge");
-        return "disconnected";
-      });
-    }, 1400);
+    setStreamEnabled(true);
+    setStreamStatus("online");
+    setStreamMessage("Viewer подключен");
   };
 
-  const connectCurrentTab = () => {
-    if (!activeTab?.id) return;
-    window.postMessage(
-      {
-        source: "threads-control-panel",
-        type: "attach-tab",
-        payload: { id: activeTab.id },
-      },
-      "*"
-    );
-    setBridgeMessage("Команда attach отправлена");
+  const disconnectStream = () => {
+    setStreamEnabled(false);
+    setStreamStatus("idle");
+    setStreamMessage("Контейнер отключен");
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.18),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.16),_transparent_24%),linear-gradient(180deg,_#060816_0%,_#0b1020_42%,_#0f172a_100%)] text-slate-100">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.18),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.14),_transparent_24%),linear-gradient(180deg,_#060816_0%,_#0b1020_42%,_#0f172a_100%)] text-slate-100">
       <div className="mx-auto grid min-h-screen max-w-[1800px] gap-4 p-3 md:p-4 lg:grid-cols-[1fr_24rem] lg:p-5">
-        <section className="flex min-h-[680px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+        <section className="flex min-h-[700px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 p-3">
             <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
               <div className="flex gap-1">
@@ -178,139 +124,122 @@ export function App() {
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
               </div>
 
-              <div className="grid h-9 grid-cols-3 rounded-lg border border-white/10 bg-black/20 p-1 xl:w-[250px]">
-                {(Object.keys(controlModeLabels) as ControlMode[]).map((mode) => (
+              <div className="grid h-9 grid-cols-2 rounded-lg border border-white/10 bg-black/20 p-1 xl:w-[240px]">
+                {(Object.keys(browserModeLabels) as BrowserMode[]).map((mode) => (
                   <button
                     key={mode}
-                    onClick={() => setControlMode(mode)}
+                    onClick={() => setBrowserMode(mode)}
                     className={`rounded-md text-xs ${
-                      controlMode === mode ? "bg-indigo-500 text-white" : "text-slate-300"
+                      browserMode === mode ? "bg-indigo-500 text-white" : "text-slate-300"
                     }`}
                   >
-                    {controlModeLabels[mode]}
+                    {browserModeLabels[mode]}
                   </button>
                 ))}
               </div>
 
               <input
-                value={browserUrl}
-                onChange={(event) => setBrowserUrl(event.target.value)}
+                value={threadsUrl}
+                onChange={(event) => setThreadsUrl(event.target.value)}
                 className="h-9 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 text-sm outline-none"
-                placeholder="https://www.threads.com/"
+                placeholder="https://www.threads.net/"
               />
 
               <button
-                onClick={openExternal}
+                onClick={openThreads}
                 className="h-9 rounded-lg bg-indigo-500 px-4 text-sm font-medium hover:bg-indigo-400"
               >
-                Открыть
+                Открыть Threads
               </button>
             </div>
           </div>
 
-          {controlMode === "extension" ? (
-            <div className="flex flex-1 flex-col bg-black/20 p-4">
-              <div className="mb-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className={`h-2.5 w-2.5 rounded-full ${getStatusClasses(bridgeStatus)}`} />
-                  <span className="text-sm">{bridgeMessage}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={detectExtension}
-                    className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm hover:bg-white/10"
-                  >
-                    Найти bridge
-                  </button>
-                  <button
-                    onClick={requestActiveTab}
-                    className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm hover:bg-white/10"
-                  >
-                    Найти вкладку
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="text-sm font-medium">Текущая вкладка</div>
-                    <button
-                      onClick={connectCurrentTab}
-                      disabled={!activeTab?.id}
-                      className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Взять контроль
-                    </button>
-                  </div>
-
-                  <div className="space-y-3 text-sm text-slate-300">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-1 text-xs text-slate-400">Title</div>
-                      <div>{activeTab?.title || "—"}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-1 text-xs text-slate-400">URL</div>
-                      <div className="break-all">{activeTab?.url || "—"}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-1 text-xs text-slate-400">Tab ID</div>
-                      <div>{activeTab?.id ?? "—"}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                  <div className="mb-3 font-medium text-slate-100">Как это работает</div>
-                  <div className="space-y-3">
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      1. Открыть Threads в обычной вкладке браузера
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      2. Расширение находит вкладку через Chrome Tabs API
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      3. Панель отправляет команды в extension/local bridge
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      4. Уже extension управляет страницей Threads
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : controlMode === "remote" ? (
-            <div className="flex flex-1 flex-col">
-              <div className="flex flex-col gap-2 border-b border-white/10 p-3 md:flex-row">
+          {browserMode === "stream" ? (
+            <div className="flex flex-1 flex-col bg-black/20">
+              <div className="grid gap-3 border-b border-white/10 p-3 xl:grid-cols-[1.3fr_0.9fr_0.9fr_0.7fr_auto_auto]">
                 <input
-                  value={remoteSessionInput}
-                  onChange={(event) => setRemoteSessionInput(event.target.value)}
-                  className="h-9 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 text-sm outline-none"
-                  placeholder="https://remote-session-url"
+                  value={streamBaseInput}
+                  onChange={(event) => setStreamBaseInput(event.target.value)}
+                  className="h-9 rounded-lg border border-white/10 bg-black/20 px-3 text-sm outline-none"
+                  placeholder="http://127.0.0.1:3010"
                 />
-                {remoteSessionUrl ? (
+                <input
+                  value={viewerPath}
+                  onChange={(event) => setViewerPath(event.target.value)}
+                  className="h-9 rounded-lg border border-white/10 bg-black/20 px-3 text-sm outline-none"
+                  placeholder="/viewer"
+                />
+                <input
+                  value={controlPath}
+                  onChange={(event) => setControlPath(event.target.value)}
+                  className="h-9 rounded-lg border border-white/10 bg-black/20 px-3 text-sm outline-none"
+                  placeholder="/control"
+                />
+                <input
+                  value={sessionId}
+                  onChange={(event) => setSessionId(event.target.value)}
+                  className="h-9 rounded-lg border border-white/10 bg-black/20 px-3 text-sm outline-none"
+                  placeholder="threads-main"
+                />
+                <button
+                  onClick={checkContainer}
+                  className="h-9 rounded-lg border border-white/10 bg-white/5 px-4 text-sm hover:bg-white/10"
+                >
+                  Check
+                </button>
+                {streamEnabled ? (
                   <button
-                    onClick={disconnectRemote}
+                    onClick={disconnectStream}
                     className="h-9 rounded-lg bg-rose-500 px-4 text-sm font-medium hover:bg-rose-400"
                   >
-                    Отключить
+                    Disconnect
                   </button>
                 ) : (
                   <button
-                    onClick={connectRemote}
+                    onClick={connectStream}
                     className="h-9 rounded-lg bg-emerald-500 px-4 text-sm font-medium hover:bg-emerald-400"
                   >
-                    Подключить
+                    Connect
                   </button>
                 )}
               </div>
 
-              {remoteSessionUrl ? (
-                <iframe title="Remote Browser Session" src={remoteSessionUrl} className="h-full w-full bg-white" />
+              <div className="grid gap-4 border-b border-white/10 p-3 xl:grid-cols-[1fr_1fr]">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
+                  <div className="mb-2 flex items-center gap-3 text-slate-100">
+                    <span className={`h-2.5 w-2.5 rounded-full ${statusDot(streamStatus)}`} />
+                    <span>{streamMessage}</span>
+                  </div>
+                  <div className="break-all text-xs text-slate-400">{controlUrl || "—"}</div>
+                </div>
+
+                <input
+                  value={streamToken}
+                  onChange={(event) => setStreamToken(event.target.value)}
+                  className="h-12 rounded-xl border border-white/10 bg-black/20 px-3 text-sm outline-none"
+                  placeholder="token"
+                />
+              </div>
+
+              {viewerUrl ? (
+                <iframe title="Docker Connect Stream" src={viewerUrl} className="h-full w-full bg-black" />
               ) : (
-                <div className="flex flex-1 items-center justify-center bg-black/20 p-6">
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-300">
-                    Remote session
+                <div className="flex flex-1 items-center justify-center p-6">
+                  <div className="w-full max-w-3xl rounded-2xl border border-dashed border-white/10 bg-white/5 p-6">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+                        <div className="mb-2 text-slate-100">1</div>
+                        <div>Запусти Docker контейнер локально</div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+                        <div className="mb-2 text-slate-100">2</div>
+                        <div>Открой Threads в обычном Chrome профиле</div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+                        <div className="mb-2 text-slate-100">3</div>
+                        <div>Подключи viewer контейнера через Connect</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -318,12 +247,12 @@ export function App() {
           ) : (
             <div className="flex flex-1 items-center justify-center bg-black/20 p-6">
               <a
-                href={normalizedBrowserUrl || "https://www.threads.com/"}
+                href={threadsUrl || "https://www.threads.net/"}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium hover:bg-white/10"
               >
-                Открыть Threads
+                Открыть во внешней вкладке
               </a>
             </div>
           )}
@@ -332,7 +261,7 @@ export function App() {
         <aside className="flex flex-col gap-4">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="mb-4 grid grid-cols-3 gap-1">
-              {(Object.keys(modeLabels) as LlmMode[]).map((mode) => (
+              {(Object.keys(llmModeLabels) as LlmMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setLlmMode(mode)}
@@ -342,7 +271,7 @@ export function App() {
                       : "border-white/10 bg-black/20"
                   }`}
                 >
-                  {modeLabels[mode]}
+                  {llmModeLabels[mode]}
                 </button>
               ))}
             </div>
@@ -427,8 +356,8 @@ export function App() {
                 <span>Safety filter</span>
                 <input
                   type="checkbox"
-                  checked={semanticFilter}
-                  onChange={() => setSemanticFilter((value) => !value)}
+                  checked={safetyFilter}
+                  onChange={() => setSafetyFilter((value) => !value)}
                   className="h-4 w-4"
                 />
               </label>
@@ -436,8 +365,8 @@ export function App() {
                 <span>Question ending</span>
                 <input
                   type="checkbox"
-                  checked={includeQuestion}
-                  onChange={() => setIncludeQuestion((value) => !value)}
+                  checked={questionEnding}
+                  onChange={() => setQuestionEnding((value) => !value)}
                   className="h-4 w-4"
                 />
               </label>
