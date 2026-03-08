@@ -266,7 +266,8 @@ module.exports = async (req, res) => {
 
                 if (!WPAY_STORE_API_KEY) {
                     console.log(`[TG] Answering callback query ${queryId} with Wallet Pay not configured alert`);
-                    return await sendTG('answerCallbackQuery', { callback_query_id: queryId, text: "Wallet Pay is not configured on server.", show_alert: true });
+                    await sendTG('answerCallbackQuery', { callback_query_id: queryId, text: "Wallet Pay is not configured on server.", show_alert: true });
+                    return res.status(200).json({ ok: true });
                 }
 
                 // Create Wallet Pay Order
@@ -321,7 +322,9 @@ module.exports = async (req, res) => {
                 console.timeEnd(`DB_FETCH_USER_TRIAL_${from.id}`);
                 if (user?.trial_used) {
                     console.log(`[TG] User ${from.id} already used promo, sending alert`);
-                    return await sendTG('sendMessage', { chat_id: from.id, text: texts.promo_used });
+                    await sendTG('sendMessage', { chat_id: from.id, text: texts.promo_used });
+                    await sendTG('answerCallbackQuery', { callback_query_id: queryId });
+                    return res.status(200).json({ ok: true });
                 }
 
                 const trialKey = `TH-TRIAL-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
