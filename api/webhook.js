@@ -423,7 +423,11 @@ async function sendTG(method, body) {
         body: JSON.stringify(body)
     }).then(r => r.json());
     console.timeEnd(`FETCH_TG_API_${method}`);
-    if (!res.ok) console.error(`[TG_ERR] ${method}:`, res.description);
+    if (!res.ok) {
+        // Ignore "query is too old" errors as they are harmless and clutter logs
+        if (res.description && res.description.includes('query is too old')) return res;
+        console.error(`[TG_ERR] ${method}:`, res.description);
+    }
     return res;
 }
 
