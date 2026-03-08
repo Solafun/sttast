@@ -14,10 +14,10 @@ const UI = {
         plan_1m: "1 месяц",
         plan_1y: "1 год",
         promo_used: "❌ Вы уже использовали промо-период.",
-        crypto_info: "Для оплаты криптой выберите подходящий тариф. Вы получите ссылку на оплату через Wallet Pay.",
+        crypto_info: "Выберите подходящий тариф. После успешной оплаты вы сразу получите лицензионный ключ для активации расширения.",
         success_payment: "✅ Оплата прошла успешно!\n\nТвой лицензионный ключ (${duration}):\n`${key}`\n\nВставь его в настройки расширения.",
         success_trial: "🎁 Тебе выдан пробный ключ на 24 часа!\n\nКлюч:\n`${key}`\n\nПоспеши использовать!",
-        welcome_default: "Привет! Я бот Threads AI. Выбери способ оплаты и тарифный план ниже:"
+        welcome_default: "Привет! Я бот Threads AI. Выбери тарифный план ниже. Сразу после оплаты ты получишь лицензионный ключ для работы в расширении:"
     },
     en: {
         stars_plans: "Pay with Stars ⭐",
@@ -27,18 +27,18 @@ const UI = {
         plan_1m: "1 month",
         plan_1y: "1 year",
         promo_used: "❌ You have already used your promo period.",
-        crypto_info: "To pay with crypto, select a plan. You will receive a Wallet Pay payment link.",
+        crypto_info: "Select a plan. After successful payment, you will immediately receive a license key to activate the extension.",
         success_payment: "✅ Payment successful!\n\nYour license key (${duration}):\n`${key}`\n\nPaste it into the extension settings.",
         success_trial: "🎁 You received a 24h trial key!\n\nKey:\n`${key}`\n\nUse it now!",
-        welcome_default: "Hi! I am the Threads AI Bot. Choose your payment method and plan below:"
+        welcome_default: "Hi! I am the Threads AI Bot. Choose your plan below. You will receive your license key immediately after successful payment:"
     }
 };
 
 // Subscription plans
 const PLANS = {
-    "7d": { stars: 100, crypto_val: "3.5", days: 7, label_ru: "7 дней", label_en: "7 days" },
-    "1m": { stars: 300, crypto_val: "10.0", days: 30, label_ru: "1 месяц", label_en: "1 month" },
-    "1y": { stars: 2700, crypto_val: "90.0", days: 365, label_ru: "1 год", label_en: "1 year" }
+    "7d": { stars: 100, crypto_val: "1.5", days: 7, label_ru: "7 дней", label_en: "7 days" },
+    "1m": { stars: 400, crypto_val: "6", days: 30, label_ru: "1 месяц", label_en: "1 month" },
+    "1y": { stars: 4000, crypto_val: "60", days: 365, label_ru: "1 год", label_en: "1 year" }
 };
 
 module.exports = async (req, res) => {
