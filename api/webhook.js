@@ -1,8 +1,40 @@
+const { createClient } = require('@supabase/supabase-js');
+const fetch = require('node-fetch');
 const crypto = require('crypto');
 
 const { BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WPAY_STORE_API_KEY } = process.env;
 
-// Update PLANS with crypto prices (USDT)
+// UI Text Dictionary
+const UI = {
+    ru: {
+        stars_plans: "Оплата Звездами ⭐",
+        crypto_plans: "Оплата Криптой 💎",
+        get_promo: "🎁 Промо (24ч)",
+        plan_7d: "7 дней",
+        plan_1m: "1 месяц",
+        plan_1y: "1 год",
+        promo_used: "❌ Вы уже использовали промо-период.",
+        crypto_info: "Для оплаты криптой выберите подходящий тариф. Вы получите ссылку на оплату через Wallet Pay.",
+        success_payment: "✅ Оплата прошла успешно!\n\nТвой лицензионный ключ (${duration}):\n`${key}`\n\nВставь его в настройки расширения.",
+        success_trial: "🎁 Тебе выдан пробный ключ на 24 часа!\n\nКлюч:\n`${key}`\n\nПоспеши использовать!",
+        welcome_default: "Привет! Я бот Threads AI. Выбери способ оплаты и тарифный план ниже:"
+    },
+    en: {
+        stars_plans: "Pay with Stars ⭐",
+        crypto_plans: "Pay with Crypto 💎",
+        get_promo: "🎁 Promo (24h)",
+        plan_7d: "7 days",
+        plan_1m: "1 month",
+        plan_1y: "1 year",
+        promo_used: "❌ You have already used your promo period.",
+        crypto_info: "To pay with crypto, select a plan. You will receive a Wallet Pay payment link.",
+        success_payment: "✅ Payment successful!\n\nYour license key (${duration}):\n`${key}`\n\nPaste it into the extension settings.",
+        success_trial: "🎁 You received a 24h trial key!\n\nKey:\n`${key}`\n\nUse it now!",
+        welcome_default: "Hi! I am the Threads AI Bot. Choose your payment method and plan below:"
+    }
+};
+
+// Subscription plans
 const PLANS = {
     "7d": { stars: 100, crypto_val: "3.5", days: 7, label_ru: "7 дней", label_en: "7 days" },
     "1m": { stars: 300, crypto_val: "10.0", days: 30, label_ru: "1 месяц", label_en: "1 month" },
