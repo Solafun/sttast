@@ -8,12 +8,24 @@ const { BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 module.exports = async (req, res) => {
+    console.log('--- Webhook Triggered ---');
+    console.log('Method:', req.method);
+
+    // Check Env Vars
+    if (!BOT_TOKEN) console.error('CRITICAL: BOT_TOKEN is missing!');
+    if (!SUPABASE_URL) console.error('CRITICAL: SUPABASE_URL is missing!');
+
     if (req.method !== 'POST') {
-        return res.status(200).send('Bot is active');
+        return res.status(200).send('Bot is active. Use POST for Telegram updates.');
     }
 
     const update = req.body;
-    if (!update) return res.status(200).end();
+    console.log('Update Received:', JSON.stringify(update, null, 2));
+
+    if (!update || !update.update_id) {
+        console.warn('Invalid update received (no update_id)');
+        return res.status(200).send('Invalid update');
+    }
 
     const message = update.message;
 
