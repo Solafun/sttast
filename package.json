@@ -1,0 +1,12 @@
+{
+    "name": "threads-bot-billing",
+    "version": "1.0.0",
+    "main": "api/webhook.js",
+    "scripts": {
+        "start": "node api/webhook.js"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.39.0",
+        "node-fetch": "^2.7.0"
+    }
+}
