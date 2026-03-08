@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
     const update = req.body;
     if (!update || !update.update_id) return res.status(200).end();
 
-    const from = update.message?.from || update.callback_query?.from;
+    const from = update.message?.from || update.callback_query?.from || update.pre_checkout_query?.from;
     const lang = (from?.language_code || 'en').startsWith('ru') ? 'ru' : 'en';
     const texts = UI[lang];
 
@@ -61,7 +61,7 @@ module.exports = async (req, res) => {
                 language_code: lang
             });
 
-            // Get Welcome Message from DB (fallback to UI dict)
+            // Get Welcome Message from DB
             const { data: settings } = await client
                 .from('bot_settings')
                 .select('value')
@@ -90,11 +90,22 @@ module.exports = async (req, res) => {
                 const { data: sTitle } = await client.from('bot_settings').select('value').eq('key', `invoice_title_${lang}`).maybeSingle();
                 const { data: sDesc } = await client.from('bot_settings').select('value').eq('key', `invoice_desc_${lang}`).maybeSingle();
 
+                const invoicePayload = `license_${from.id}_${Date.now()}`;
+
+                // --- NEW: Log Payment Intent (Pending) ---
+                await client.from('payments').insert({
+                    user_id: from.id,
+                    amount: 500,
+                    currency: 'stars',
+                    status: 'pending',
+                    provider_payment_charge_id: invoicePayload
+                });
+
                 await sendTG('sendInvoice', {
                     chat_id: from.id,
                     title: sTitle?.value || (lang === 'ru' ? "Лицензия Threads AI" : "Threads AI License"),
                     description: sDesc?.value || (lang === 'ru' ? "Доступ на 1 год" : "1 Year Access"),
-                    payload: `license_${from.id}_${Date.now()}`,
+                    payload: invoicePayload,
                     provider_token: "",
                     currency: "XTR",
                     prices: [{ label: "License", amount: 500 }]
@@ -121,14 +132,16 @@ module.exports = async (req, res) => {
         // 4. Handle Successful Payment
         if (update.message && update.message.successful_payment) {
             const userId = from.id;
+            const sp = update.message.successful_payment;
 
-            // Log Payment
+            // Log Final Payment Status (Completed)
             await client.from('payments').insert({
                 user_id: userId,
-                amount: update.message.successful_payment.total_amount,
+                amount: sp.total_amount,
                 currency: 'stars',
                 status: 'completed',
-                provider_payload: update.message.successful_payment
+                provider_payment_charge_id: sp.invoice_payload,
+                provider_payload: sp
             });
 
             // Generate License Key
@@ -143,7 +156,7 @@ module.exports = async (req, res) => {
                 status: 'active'
             });
 
-            // Send Key to User (translated)
+            // Send Key to User
             const successMsg = texts.success_payment.replace('${key}', licenseKey);
             await sendTG('sendMessage', {
                 chat_id: userId,
