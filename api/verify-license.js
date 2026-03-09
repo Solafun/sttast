@@ -1,13 +1,14 @@
 // /api/verify-license.js (разворачивается на Vercel)
 module.exports = async (req, res) => {
+  console.log('[PROXY] Request received:', req.method);
   try {
-    // В некоторых окружениях req.body может прийти как строка
     let body = req.body;
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch (e) { }
     }
 
     const input_key = body?.input_key;
+    console.log('[PROXY] License Key to verify:', input_key ? '***' + input_key.slice(-5) : 'MISSING');
 
     if (!input_key) {
       return res.status(400).json({ ok: false, error: 'Missing input_key' });
@@ -16,10 +17,11 @@ module.exports = async (req, res) => {
     const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Server Configuration Error: Missing Supabase variables');
+      console.error('[PROXY] ERROR: Missing Supabase variables in Vercel');
       return res.status(500).json({ ok: false, error: 'Server environment not configured' });
     }
 
+    console.log('[PROXY] Calling Supabase RPC...');
     const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_license_key`, {
       method: "POST",
       headers: {
@@ -30,16 +32,17 @@ module.exports = async (req, res) => {
       body: JSON.stringify({ input_key })
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Supabase RPC Error:', errorText);
-      return res.status(response.status).json({ ok: false, error: 'Supabase request failed' });
-    }
-
+    const debugStatus = response.status;
     const result = await response.json();
+
+    console.log('[PROXY] Supabase Response Status:', debugStatus);
+    console.log('[PROXY] Supabase Raw Result:', JSON.stringify(result));
+
+    // Важно: возвращаем результат именно в том формате, который ждет расширение
+    // Ожидаемый формат: { ok: true, status: 'active'|'invalid'|'expired' }
     return res.status(200).json(result);
   } catch (error) {
-    console.error('Proxy Error:', error.message);
-    return res.status(500).json({ ok: false, error: 'Internal Server Error' });
+    console.error('[PROXY] CRITICAL ERROR:', error.message);
+    return res.status(500).json({ ok: false, error: 'Internal Server Error: ' + error.message });
   }
 }
