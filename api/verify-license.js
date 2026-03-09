@@ -1,7 +1,7 @@
 // /api/verify-license.js (разворачивается на Vercel)
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   const { input_key } = req.body;
-  
+
   // Ключи Supabase берем из Environment Variables на Vercel!
   // В коде их больше НЕТ.
   const SUPABASE_URL = process.env.SUPABASE_URL;
